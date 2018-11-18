@@ -1,4 +1,5 @@
 #include "learnuv.h"
+#include <stdio.h>
 
 #define BUF_SIZE 37
 static const char *filename = __MAGIC_FILE__;
@@ -10,6 +11,7 @@ typedef struct context_struct {
 
 void read_cb(uv_fs_t* read_req) {
   int r = 0;
+
   if (read_req->result < 0) CHECK(read_req->result, "uv_fs_read callback");
 
   /* extracting our context from the read_req */
@@ -23,6 +25,7 @@ void read_cb(uv_fs_t* read_req) {
 
   /* 5. Close the file descriptor (synchronously) */
   uv_fs_t close_req;
+  r = uv_fs_close(uv_default_loop(), &close_req, context->open_req->result, NULL );
   if (r < 0) CHECK(abs(r), "uv_fs_close");
 
   /* cleanup all requests and context */
@@ -43,14 +46,19 @@ void init(uv_loop_t *loop) {
   context->open_req  = open_req;
 
   /* 1. Open file */
+  r = uv_fs_open(loop, open_req, filename, O_RDONLY, S_IRUSR, NULL);
   if (r < 0) CHECK(r, "uv_fs_open");
 
   /* 2. Create buffer and initialize it to turn it into a a uv_buf_t */
+  char* buf = (char*)malloc(BUF_SIZE + 1);
+  memset(buf, 0, BUF_SIZE+1);
+  context->iov = uv_buf_init(buf, BUF_SIZE);
 
   /* allow us to access the context inside read_cb */
   read_req->data = context;
 
   /* 3. Read from the file into the buffer */
+  r = uv_fs_read(loop, read_req, open_req->result, &(context->iov), 1, -1, read_cb);
   if (r < 0) CHECK(r, "uv_fs_read");
 }
 
